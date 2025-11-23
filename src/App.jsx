@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Calendar as CalendarIcon, 
@@ -23,51 +23,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-// --- MOCK DATA (Datos de Ejemplo) ---
-
-const USERS = [
-  { id: 1, email: 'juan@colegio.cl', password: '1234', name: 'Juan Profe', role: 'teacher', avatar: 'JP' },
-  { id: 2, email: 'admin@colegio.cl', password: 'admin', name: 'Directora Marta', role: 'admin', avatar: 'DM' }
-];
-
-const INITIAL_COURSES = [
-  { id: 1, title: 'Matemáticas 4° Medio', location: 'Sala 12', time: '08:00 AM', type: 'school', teacherId: 1 },
-  { id: 2, title: 'Taller de Carpintería', location: 'Centro Comunitario', time: '18:30 PM', type: 'workshop', teacherId: 1 },
-  { id: 3, title: 'Historia y Geografía', location: 'Sala 4B', time: '10:15 AM', type: 'school', teacherId: 1 },
-];
-
-const INITIAL_STUDENTS = {
-  1: [
-    { id: 101, name: 'Juan Pérez', status: 'present' },
-    { id: 102, name: 'María Gonzalez', status: 'present' },
-    { id: 103, name: 'Carlos Ruiz', status: 'absent' },
-    { id: 104, name: 'Ana Silva', status: null },
-    { id: 105, name: 'Pedro Tapia', status: null },
-  ],
-  2: [
-    { id: 201, name: 'Roberto Díaz', status: null },
-    { id: 202, name: 'Elena Espinoza', status: null },
-    { id: 203, name: 'Javier Soto', status: null },
-  ],
-  3: [
-    { id: 301, name: 'Fernanda Lagos', status: null },
-    { id: 302, name: 'Diego Torres', status: null },
-  ]
-};
-
-// Datos para el Calendario (Simulados)
-const CALENDAR_EVENTS = [
-  { day: 5, title: 'Reunión Apoderados', type: 'meeting' },
-  { day: 12, title: 'Entrega Notas', type: 'deadline' },
-  { day: 15, title: 'Día del Profesor', type: 'holiday' },
-  { day: 24, title: 'Taller Comunitario', type: 'workshop' },
-];
-
-const TEACHER_STATUS_DB = [
-  { id: 1, name: 'Juan Profe', department: 'Matemáticas', status: 'active', activeCourses: 3 },
-  { id: 2, name: 'Ana Maria', department: 'Ciencias', status: 'vacation', activeCourses: 4 },
-  { id: 3, name: 'Carlos Gym', department: 'Deportes', status: 'active', activeCourses: 2 },
-];
 
 const AttendanceApp = () => {
   // --- ESTADO GLOBAL Y AUTH ---
@@ -75,29 +30,61 @@ const AttendanceApp = () => {
   const [currentUser, setCurrentUser] = useState(null); 
   const [loginError, setLoginError] = useState('');
   
-  // --- ESTADO DE LA APP ---
-  const [view, setView] = useState('dashboard'); // dashboard, course, admin-users, calendar
+  // --- ESTADO DE DATOS (Ya no usamos las constantes fijas) ---
+  const [courses, setCourses] = useState([]); // Lista de cursos vacía al inicio
+  const [calendarEvents, setCalendarEvents] = useState([]); // Calendario vacío
+  const [studentsList, setStudentsList] = useState([]); // Alumnos del curso seleccionado
+  
+  // --- ESTADO DE LA UI ---
+  const [view, setView] = useState('dashboard'); 
   const [selectedCourse, setSelectedCourse] = useState(null);
-  const [teacherStatus, setTeacherStatus] = useState('active'); // active, vacation
-  const [attendance, setAttendance] = useState(INITIAL_STUDENTS);
+  const [teacherStatus, setTeacherStatus] = useState('active'); 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Estado del Login Form
+  // Estado Login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // --- 1. CARGAR DATOS INICIALES (Dashboard) ---
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetch('/api/get_dashboard.php')
+        .then(res => res.json())
+        .then(data => {
+          setCourses(data.courses);
+          setCalendarEvents(data.calendar);
+        })
+        .catch(err => console.error("Error cargando dashboard:", err));
+    }
+  }, [isAuthenticated]);
+
+  // --- 2. CARGAR ALUMNOS (Cuando seleccionas un curso) ---
   // --- FUNCIONES DE AUTENTICACIÓN ---
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    const user = USERS.find(u => u.email === email && u.password === password);
-    
-    if (user) {
-      setCurrentUser(user);
+    setLoginError('');
+
+    try {
+      const response = await fetch('/api/login.php', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en el servidor');
+      }
+
+      const data = await response.json();
+
+      setCurrentUser(data);
       setIsAuthenticated(true);
-      setLoginError('');
-      setView(user.role === 'admin' ? 'admin-dashboard' : 'dashboard');
-    } else {
-      setLoginError('Credenciales incorrectas. Intenta nuevamente.');
+      setView(data.role === 'admin' ? 'admin-dashboard' : 'dashboard');
+
+    } catch (error) {
+      console.error("Error de login:", error);
+      setLoginError('Credenciales incorrectas o error de conexión.');
     }
   };
 
@@ -571,7 +558,7 @@ const AttendanceApp = () => {
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {INITIAL_COURSES.map(course => (
+                        {courses.map(course => (
                           <div 
                             key={course.id}
                             onClick={() => handleCourseSelect(course)}
@@ -594,7 +581,7 @@ const AttendanceApp = () => {
                                 <Users size={14} /> {course.location}
                               </p>
                               <div className="flex items-center justify-between text-sm text-slate-500 border-t pt-4">
-                                <span>{attendance[course.id]?.length} Alumnos</span>
+                                <span>{studentsList[course.id]?.length} Alumnos</span>
                                 <span className="flex items-center gap-1 text-indigo-600 font-medium group-hover:underline">
                                   Tomar lista <ChevronLeft className="rotate-180" size={16} />
                                 </span>
