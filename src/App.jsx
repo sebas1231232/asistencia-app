@@ -12,59 +12,80 @@ import {
   Palmtree,
   Briefcase,
   ChevronLeft,
-  Lock,
   UserCog,
   BarChart3,
   Search,
   School,
   Sun,
-  MapPin,
   MoreVertical,
   ChevronRight
 } from 'lucide-react';
 
+// Datos estáticos solo para la vista de administración (ya que no creamos endpoint para esto aún)
+const TEACHER_STATUS_DB = [
+  { id: 1, name: 'Juan Profe', department: 'Matemáticas', status: 'active', activeCourses: 3 },
+  { id: 2, name: 'Ana Maria', department: 'Ciencias', status: 'vacation', activeCourses: 4 },
+  { id: 3, name: 'Carlos Gym', department: 'Deportes', status: 'active', activeCourses: 2 },
+];
 
 const AttendanceApp = () => {
-  // --- ESTADO GLOBAL Y AUTH ---
+  // --- ESTADOS DE AUTENTICACIÓN ---
+  // Controla si el usuario ha iniciado sesión correctamente
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Almacena los datos del usuario logueado (id, nombre, rol, avatar)
   const [currentUser, setCurrentUser] = useState(null); 
+  // Guarda mensajes de error si el login falla
   const [loginError, setLoginError] = useState('');
   
-  // --- ESTADO DE DATOS (Ya no usamos las constantes fijas) ---
-  const [courses, setCourses] = useState([]); // Lista de cursos vacía al inicio
-  const [calendarEvents, setCalendarEvents] = useState([]); // Calendario vacío
-  const [studentsList, setStudentsList] = useState([]); // Alumnos del curso seleccionado
+  // --- ESTADOS DE DATOS (Desde la Base de Datos) ---
+  // Almacena la lista de cursos traída desde el servidor
+  const [courses, setCourses] = useState([]); 
+  // Almacena los eventos del calendario traídos desde el servidor
+  const [calendarEvents, setCalendarEvents] = useState([]); 
+  // Almacena la lista de alumnos del curso que se está visualizando actualmente
+  const [studentsList, setStudentsList] = useState([]); 
   
-  // --- ESTADO DE LA UI ---
+  // --- ESTADOS DE LA INTERFAZ (UI) ---
+  // Controla qué pantalla se muestra ('dashboard', 'course', 'admin-dashboard', 'calendar')
   const [view, setView] = useState('dashboard'); 
+  // Guarda el objeto del curso que el usuario seleccionó para ver detalles
   const [selectedCourse, setSelectedCourse] = useState(null);
+  // Controla si el profesor está en modo 'active' o 'vacation'
   const [teacherStatus, setTeacherStatus] = useState('active'); 
+  // Controla si el menú lateral está abierto en dispositivos móviles
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Estado Login
+  // --- ESTADOS DEL FORMULARIO ---
+  // Captura el texto del campo email en el login
   const [email, setEmail] = useState('');
+  // Captura el texto del campo password en el login
   const [password, setPassword] = useState('');
 
-  // --- 1. CARGAR DATOS INICIALES (Dashboard) ---
+  // --- EFECTOS (Carga de datos) ---
+  
+  // Carga la lista de cursos y calendario cuando el usuario se autentica
   useEffect(() => {
     if (isAuthenticated) {
       fetch('/api/get_dashboard.php')
         .then(res => res.json())
         .then(data => {
-          setCourses(data.courses);
-          setCalendarEvents(data.calendar);
+          // Guardamos los cursos y eventos en sus estados correspondientes
+          setCourses(data.courses || []);
+          setCalendarEvents(data.calendar || []);
         })
         .catch(err => console.error("Error cargando dashboard:", err));
     }
   }, [isAuthenticated]);
 
-  // --- 2. CARGAR ALUMNOS (Cuando seleccionas un curso) ---
-  // --- FUNCIONES DE AUTENTICACIÓN ---
+  // --- FUNCIONES DE LÓGICA ---
+
+  // Maneja el envío del formulario de login
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoginError('');
+    setLoginError(''); // Limpia errores previos
 
     try {
+      // Petición POST al backend para verificar credenciales
       const response = await fetch('/api/login.php', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,10 +97,12 @@ const AttendanceApp = () => {
         throw new Error(errorData.message || 'Error en el servidor');
       }
 
-      const data = await response.json();
+      const data = await response.json(); // Datos del usuario recibidos
 
+      // Actualiza estados para dar acceso
       setCurrentUser(data);
       setIsAuthenticated(true);
+      // Redirige según el rol del usuario
       setView(data.role === 'admin' ? 'admin-dashboard' : 'dashboard');
 
     } catch (error) {
@@ -88,6 +111,7 @@ const AttendanceApp = () => {
     }
   };
 
+  // Cierra la sesión y limpia los estados importantes
   const handleLogout = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -95,44 +119,56 @@ const AttendanceApp = () => {
     setPassword('');
     setView('dashboard');
     setTeacherStatus('active'); 
+    setCourses([]);
   };
 
-  // --- FUNCIONES DE LA APP ---
+  // Maneja la selección de un curso para ver su detalle y alumnos
   const handleCourseSelect = (course) => {
-    // Si está en vacaciones, bloqueamos la entrada al curso
+    // Evita entrar al curso si está en modo vacaciones
     if (teacherStatus === 'vacation') return;
     
     setSelectedCourse(course);
     setView('course');
-    setMobileMenuOpen(false);
+    setMobileMenuOpen(false); // Cierra menú móvil si estaba abierto
+
+    // Pide al servidor los alumnos de este curso específico
+    fetch(`/api/get_students.php?course_id=${course.id}`)
+      .then(res => res.json())
+      .then(data => setStudentsList(data))
+      .catch(err => console.error("Error cargando alumnos:", err));
   };
 
+  // Vuelve a la vista principal
   const handleBack = () => {
     setSelectedCourse(null);
     setView('dashboard');
+    setStudentsList([]); // Limpia la lista de alumnos al salir
   };
   
+  // Cambia el estado del profesor (Activo / Vacaciones)
   const handleStatusChange = (status) => {
     setTeacherStatus(status);
-    // Si cambia a vacaciones y estaba en un curso, volver al dashboard
+    // Si activa vacaciones estando en un curso, lo saca al dashboard
     if (status === 'vacation') {
       setView('dashboard');
       setSelectedCourse(null);
     }
   }
 
+  // Actualiza el estado de asistencia de un alumno localmente (Visual)
   const updateAttendance = (studentId, newStatus) => {
     if (teacherStatus === 'vacation') return;
-    setAttendance(prev => ({
-      ...prev,
-      [selectedCourse.id]: prev[selectedCourse.id].map(student => 
-        student.id === studentId ? { ...student, status: newStatus } : student
-      )
-    }));
+    
+    // Recorre la lista y actualiza solo el alumno que cambió
+    setStudentsList(prev => prev.map(student => 
+      // Comparamos IDs (convertimos a número por si acaso vienen como string del JSON)
+      Number(student.id) === Number(studentId) ? { ...student, status: newStatus } : student
+    ));
   };
 
-  // --- VISTA DE LOGIN (RESTAURADA) ---
-  // Este bloque faltaba y causaba el error de "role of null"
+  // --- RENDERIZADO (VISTAS) ---
+
+  // Vista de Login (Si no está autenticado)
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
@@ -205,9 +241,7 @@ const AttendanceApp = () => {
     );
   }
 
-  // --- COMPONENTES VISUALES ---
-
-  // 1. VISTA DE CALENDARIO
+  // Componente Interno: Vista Calendario
   const CalendarView = () => (
     <div className="max-w-5xl mx-auto animate-in fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -220,20 +254,17 @@ const AttendanceApp = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {/* Cabecera Dias */}
         <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
           {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map(day => (
             <div key={day} className="py-3 text-center text-sm font-semibold text-slate-500">{day}</div>
           ))}
         </div>
-        {/* Grilla Dias */}
         <div className="grid grid-cols-7 auto-rows-fr bg-slate-100 gap-px border-b border-l border-slate-200">
           {Array.from({ length: 35 }).map((_, i) => {
-            const dayNum = i - 3; // Ajuste simple para empezar el mes
-            const isToday = dayNum === 24; // Simulamos que hoy es 24
-            const event = dayNum > 0 && dayNum <= 30 ? CALENDAR_EVENTS.find(e => e.day === dayNum) : null;
-            
-            // Si está en vacaciones, marcamos los días futuros
+            const dayNum = i - 3; 
+            const isToday = dayNum === 24; 
+            // Busca evento en el estado calendarEvents traido de la API
+            const event = dayNum > 0 && dayNum <= 30 ? calendarEvents.find(e => parseInt(e.day) === dayNum) : null;
             const isVacationDay = teacherStatus === 'vacation' && dayNum >= 24 && dayNum <= 30;
 
             return (
@@ -249,7 +280,6 @@ const AttendanceApp = () => {
                   )}
                 </div>
                 
-                {/* Eventos */}
                 <div className="mt-2 space-y-1">
                   {event && (
                     <div className={`text-xs px-1.5 py-0.5 rounded truncate ${
@@ -274,10 +304,9 @@ const AttendanceApp = () => {
     </div>
   );
 
-  // 2. VISTA DE VACACIONES (INTERFAZ ESPECIAL)
+  // Componente Interno: Vista Vacaciones
   const VacationDashboard = () => (
     <div className="max-w-4xl mx-auto animate-in zoom-in-95 duration-500">
-      {/* Tarjeta Principal de Vacaciones */}
       <div className="bg-gradient-to-r from-amber-500 to-orange-400 rounded-2xl shadow-lg text-white overflow-hidden relative mb-8">
         <div className="absolute right-0 top-0 h-full w-1/3 bg-white/10 skew-x-12 transform origin-bottom-right"></div>
         <div className="p-8 md:p-12 relative z-10 flex flex-col md:flex-row items-center gap-8">
@@ -294,7 +323,6 @@ const AttendanceApp = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Info Tarjeta 1 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
           <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-4">
             <CalendarIcon size={24} />
@@ -306,13 +334,12 @@ const AttendanceApp = () => {
           </div>
         </div>
 
-        {/* Info Tarjeta 2 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
           <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
             <School size={24} />
           </div>
           <h3 className="text-lg font-bold text-slate-800">Estado de Cursos</h3>
-          <p className="text-slate-500 text-sm mt-1">Tus 3 cursos están pausados</p>
+          <p className="text-slate-500 text-sm mt-1">Tus cursos están pausados</p>
           <div className="mt-4 flex gap-2">
             <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs">Matemáticas</span>
             <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs">Talleres</span>
@@ -331,8 +358,7 @@ const AttendanceApp = () => {
     </div>
   );
 
-  // --- COMPONENTES INTERNOS ---
-
+  // Componente Interno: Sidebar (Barra Lateral)
   const Sidebar = () => (
     <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white transform transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 flex flex-col`}>
       <div className="p-6 border-b border-slate-800 flex justify-between items-center">
@@ -371,7 +397,6 @@ const AttendanceApp = () => {
           </>
         )}
 
-        {/* Sección de Estado del Profesor (Solo visible para Profesores) */}
         {currentUser.role === 'teacher' && (
           <>
             <div className="mt-8 px-4 text-xs font-semibold text-slate-500 uppercase">Mi Estado</div>
@@ -416,7 +441,7 @@ const AttendanceApp = () => {
     </div>
   );
 
-  // --- ADMIN DASHBOARD ---
+  // Componente Interno: Dashboard Admin
   const AdminDashboard = () => (
     <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4">
       <div className="flex justify-between items-center mb-8">
@@ -515,12 +540,12 @@ const AttendanceApp = () => {
     </div>
   );
 
+  // --- RENDERIZADO PRINCIPAL (Layout) ---
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
       <Sidebar />
 
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Header Mobile */}
         <header className="bg-white shadow-sm p-4 flex justify-between items-center md:hidden">
           <button onClick={() => setMobileMenuOpen(true)} className="text-slate-600">
             <Menu />
@@ -531,10 +556,7 @@ const AttendanceApp = () => {
           )}
         </header>
 
-        {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
-          
-          {/* LOGICA DE VISTAS (Aquí es donde ocurre la magia) */}
           
           {view === 'admin-dashboard' && <AdminDashboard />}
           
@@ -542,12 +564,11 @@ const AttendanceApp = () => {
 
           {(view === 'dashboard' || view === 'course') && (
             <>
-              {/* Si está en VACACIONES, mostramos la interfaz especial */}
               {teacherStatus === 'vacation' ? (
                 <VacationDashboard />
               ) : (
                 <>
-                  {/* Si es DASHBOARD normal */}
+                  {/* VISTA: DASHBOARD (Lista de Cursos) */}
                   {view === 'dashboard' && (
                     <div className="max-w-5xl mx-auto animate-in fade-in">
                       <div className="flex justify-between items-center mb-6">
@@ -558,6 +579,7 @@ const AttendanceApp = () => {
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* Iteramos sobre el estado courses traído de la API */}
                         {courses.map(course => (
                           <div 
                             key={course.id}
@@ -581,7 +603,8 @@ const AttendanceApp = () => {
                                 <Users size={14} /> {course.location}
                               </p>
                               <div className="flex items-center justify-between text-sm text-slate-500 border-t pt-4">
-                                <span>{studentsList[course.id]?.length} Alumnos</span>
+                                {/* Mostramos el contador de alumnos que viene de la consulta SQL */}
+                                <span>{course.student_count} Alumnos</span>
                                 <span className="flex items-center gap-1 text-indigo-600 font-medium group-hover:underline">
                                   Tomar lista <ChevronLeft className="rotate-180" size={16} />
                                 </span>
@@ -593,7 +616,7 @@ const AttendanceApp = () => {
                     </div>
                   )}
 
-                  {/* Si es VISTA DE CURSO normal */}
+                  {/* VISTA: CURSO INDIVIDUAL (Lista de Alumnos) */}
                   {view === 'course' && (
                     <div className="max-w-4xl mx-auto animate-in slide-in-from-right-8 fade-in">
                       <button 
@@ -616,17 +639,20 @@ const AttendanceApp = () => {
                           </div>
                           <div className="flex gap-2">
                             <div className="px-4 py-2 bg-white rounded-lg border text-sm font-medium shadow-sm text-slate-600">
-                              Total: {attendance[selectedCourse.id].length}
+                              {/* Usamos studentsList.length en lugar de attendance */}
+                              Total: {studentsList.length}
                             </div>
                             <div className="px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-100 text-sm font-medium shadow-sm flex items-center gap-2">
                               <CheckCircle size={16} />
-                              Presentes: {attendance[selectedCourse.id].filter(s => s.status === 'present').length}
+                              {/* Filtramos sobre studentsList */}
+                              Presentes: {studentsList.filter(s => s.status === 'present').length}
                             </div>
                           </div>
                         </div>
 
                         <div className="divide-y divide-slate-100">
-                          {attendance[selectedCourse.id].map(student => (
+                          {/* Iteramos sobre studentsList */}
+                          {studentsList.map(student => (
                             <div key={student.id} className="p-4 flex flex-col md:flex-row items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
                               <div className="flex items-center gap-4 w-full md:w-auto">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-500 text-sm ${student.status === 'present' ? 'bg-green-100 text-green-700' : student.status === 'absent' ? 'bg-red-100 text-red-700' : 'bg-slate-200'}`}>
