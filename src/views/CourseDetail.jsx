@@ -85,11 +85,17 @@ const CourseDetail = ({ selectedCourse, studentsList, handleBack, updateAttendan
         </div>
         
         <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 sticky bottom-0">
-          <button className="px-6 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">
+          <button 
+            onClick={handleBack} // El botón cancelar simplemente vuelve atrás sin guardar
+            className="px-6 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors"
+          >
             Cancelar
           </button>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 flex items-center gap-2">
-             <CheckCircle size={18} />
+          <button 
+            onClick={handleSaveAttendance} // <--- Conectado aquí
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-all active:scale-95 flex items-center gap-2"
+          >
+              <CheckCircle size={18} />
             Guardar Asistencia
           </button>
         </div>

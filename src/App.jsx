@@ -35,16 +35,25 @@ const AttendanceApp = () => {
 
   // --- EFECTOS ---
   useEffect(() => {
-    if (isAuthenticated) {
-      fetch('/api/get_dashboard.php')
-        .then(res => res.json())
-        .then(data => {
-          setCourses(data.courses || []);
-          setCalendarEvents(data.calendar || []);
-        })
-        .catch(err => console.error("Error cargando dashboard:", err));
-    }
-  }, [isAuthenticated]);
+    if (!isAuthenticated || !currentUser) return;
+
+    const interval = setInterval(() => {
+      fetch('/api/check_session.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentUser.id, token: currentUser.token })
+      })
+      .then(res => {
+        if (res.status === 401) {
+          alert("Tu sesión ha expirado por inactividad o se ha iniciado sesión en otro dispositivo.");
+          handleLogout();
+        }
+      })
+      .catch(err => console.error("Error check session", err));
+    }, 30000); // 30 segundos
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, currentUser]);
 
   // --- LÓGICA ---
   const handleLogin = async (e) => {
@@ -90,6 +99,7 @@ const AttendanceApp = () => {
     setSelectedCourse(course);
     setView('course');
     setMobileMenuOpen(false); 
+    setStudentsList([]);
 
     fetch(`/api/get_students.php?course_id=${course.id}`)
       .then(res => res.json())
