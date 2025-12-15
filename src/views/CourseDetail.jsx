@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronLeft, CheckCircle, XCircle, Clock } from 'lucide-react';
 
-const CourseDetail = ({ selectedCourse, studentsList, handleBack, updateAttendance }) => {
+const CourseDetail = ({ selectedCourse, studentsList, handleBack, updateAttendance, handleSaveAttendance }) => {
   return (
     <div className="max-w-4xl mx-auto animate-in slide-in-from-right-8 fade-in">
       <button 
