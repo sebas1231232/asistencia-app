@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, Palmtree, School, Search, Bell, XCircle, Check, FileText, 
-  Edit2, Plus, User, Mail, Trash2, Clock, MapPin, GraduationCap, Download
+  Edit2, Plus, User, Mail, Trash2, Clock, MapPin, GraduationCap, Download, Calendar
 } from 'lucide-react';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('teachers'); // 'teachers' | 'courses' | 'students'
+  const [activeTab, setActiveTab] = useState('teachers'); 
   const [loading, setLoading] = useState(true);
   
   // Datos
@@ -21,7 +21,21 @@ const AdminDashboard = () => {
   
   // Formularios
   const [newUser, setNewUser] = useState({ name: '', email: '' });
-  const [courseForm, setCourseForm] = useState({ id: null, title: '', location: '', time: '', type: 'school', teacher_id: '' });
+  
+  // FORMULARIO DE CURSO ACTUALIZADO (Nuevos campos)
+  const [courseForm, setCourseForm] = useState({ 
+    id: null, 
+    title: '', 
+    location: '', 
+    time: '', 
+    end_time: '',
+    type: 'school', 
+    teacher_id: '',
+    day_of_week: 1, // 1 = Lunes
+    start_date: new Date().toISOString().split('T')[0], // Hoy
+    duration_weeks: 12
+  });
+
   const [studentForm, setStudentForm] = useState({ id: null, name: '', course_id: '' });
   
   const [editingUser, setEditingUser] = useState(null);
@@ -52,9 +66,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // --- NUEVA FUNCIÓN: DESCARGAR REPORTE ---
   const handleDownloadReport = () => {
-    // Redirige al navegador al script PHP, lo que fuerza la descarga del archivo
     window.location.href = '/api/export_report.php';
   };
 
@@ -102,7 +114,17 @@ const AdminDashboard = () => {
   };
 
   const openCourseModal = (course = null) => {
-    setCourseForm(course || { id: null, title: '', location: '', time: '', type: 'school', teacher_id: '' });
+    setCourseForm(course || { 
+      id: null, 
+      title: '', 
+      location: '', 
+      time: '', 
+      type: 'school', 
+      teacher_id: '',
+      day_of_week: 1, 
+      start_date: new Date().toISOString().split('T')[0], 
+      duration_weeks: 12
+    });
     setIsEditingCourse(!!course);
     setShowCourseModal(true);
   };
@@ -127,7 +149,7 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteStudent = async (id) => {
-    if(!confirm("¿Dar de baja al alumno? Se borrará su historial de asistencia.")) return;
+    if(!confirm("¿Dar de baja?")) return;
     await fetch('/api/manage_student.php', { method: 'POST', body: JSON.stringify({ action: 'delete', id }) });
     fetchData();
   };
@@ -137,6 +159,9 @@ const AdminDashboard = () => {
     setIsEditingStudent(!!student);
     setShowStudentModal(true);
   };
+
+  // Helper para mostrar el día
+  const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
   if (loading) return <div className="p-10 text-center text-slate-500">Cargando sistema...</div>;
 
@@ -150,7 +175,6 @@ const AdminDashboard = () => {
         </div>
         
         <div className="flex items-center gap-4">
-            {/* BOTÓN DESCARGAR REPORTE CONECTADO */}
             <button 
                 onClick={handleDownloadReport}
                 className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-2 shadow-sm"
@@ -175,7 +199,6 @@ const AdminDashboard = () => {
       {/* --- PESTAÑA: DOCENTES --- */}
       {activeTab === 'teachers' && (
         <>
-            {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex justify-between items-start">
                     <div><p className="text-sm font-medium text-slate-500">Profesores</p><h3 className="text-3xl font-bold text-slate-800 mt-2">{stats.total_teachers}</h3></div>
@@ -191,29 +214,18 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            {/* Solicitudes */}
             {requests.length > 0 && (
                 <div className="mb-8">
                     <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Bell className="text-rose-500 animate-pulse" /> Solicitudes ({requests.length})</h3>
                     <div className="grid gap-3">
                         {requests.map(req => (
-                            <div key={req.id} className="bg-white p-4 rounded-xl border-l-4 border-rose-500 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">
-                                        {req.avatar}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-slate-800">{req.teacher_name}</h4>
-                                        <p className="text-sm text-slate-500 flex items-center gap-2">
-                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${req.type === 'medical' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                                {req.type === 'medical' ? 'Licencia' : 'Vacaciones'}
-                                            </span>
-                                            <span className="text-xs">Del {req.start_date} al {req.end_date}</span>
-                                        </p>
-                                    </div>
+                            <div key={req.id} className="bg-white p-4 rounded-xl border-l-4 border-rose-500 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <h4 className="font-bold text-slate-800">{req.teacher_name}</h4>
+                                    <p className="text-sm text-slate-500">{req.type === 'medical' ? 'Licencia' : 'Vacaciones'} - {req.start_date}</p>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {req.file_url && <a href={`/${req.file_url}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg hover:bg-blue-100 border border-blue-200"><FileText size={14}/> Ver</a>}
+                                <div className="flex gap-2">
+                                    {req.file_url && <a href={`/${req.file_url}`} target="_blank" rel="noreferrer" className="p-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100"><FileText size={18}/></a>}
                                     <button onClick={() => handleRequestAction(req.id, 'reject')} className="p-2 text-rose-600 hover:bg-rose-50 rounded"><XCircle size={20}/></button>
                                     <button onClick={() => handleRequestAction(req.id, 'approve')} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded"><Check size={20}/></button>
                                 </div>
@@ -223,7 +235,6 @@ const AdminDashboard = () => {
                 </div>
             )}
 
-            {/* Tabla Docentes */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-4 border-b flex justify-between items-center bg-slate-50">
                     <h3 className="font-bold text-slate-700">Listado Docente</h3>
@@ -234,10 +245,7 @@ const AdminDashboard = () => {
                     <tbody className="divide-y divide-slate-100">
                         {stats.teachers.map(t => (
                             <tr key={t.id} className="hover:bg-slate-50">
-                                <td className="px-6 py-3 font-medium flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">{t.avatar}</div>
-                                    {t.name}
-                                </td>
+                                <td className="px-6 py-3 font-medium">{t.name}</td>
                                 <td className="px-6 py-3 text-slate-500">{t.email}</td>
                                 <td className="px-6 py-3 text-right flex justify-end gap-2">
                                     <button onClick={() => setEditingUser(t)} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded"><Edit2 size={16}/></button>
@@ -251,7 +259,7 @@ const AdminDashboard = () => {
         </>
       )}
 
-      {/* --- PESTAÑA: CURSOS --- */}
+      {/* --- PESTAÑA: CURSOS (ACTUALIZADA) --- */}
       {activeTab === 'courses' && (
         <div className="animate-in fade-in">
             <div className="mb-4 flex justify-between items-center">
@@ -271,7 +279,12 @@ const AdminDashboard = () => {
                         </div>
                         <h4 className="text-lg font-bold text-slate-800 pl-2 mb-1">{course.title}</h4>
                         <div className="pl-2 space-y-1 text-sm text-slate-500">
-                            <div className="flex items-center gap-2"><Clock size={14}/> {course.time}</div>
+                            {/* MOSTRAR DÍA ASIGNADO */}
+                            <div className="flex items-center gap-2 font-medium text-slate-700">
+                                <Calendar size={14} className="text-indigo-500"/> 
+                                {daysOfWeek[course.day_of_week] || 'Día ?'} 
+                                <span className="text-xs text-slate-400 font-normal">| {course.time}</span>
+                            </div>
                             <div className="flex items-center gap-2"><MapPin size={14}/> {course.location}</div>
                             <div className="flex items-center gap-2 text-indigo-600 font-medium bg-indigo-50 w-fit px-2 py-0.5 rounded mt-2"><User size={14}/> {course.teacher_name || "Sin asignar"}</div>
                         </div>
@@ -290,34 +303,19 @@ const AdminDashboard = () => {
             </div>
             <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-500 border-b">
-                    <tr>
-                        <th className="px-6 py-3">Nombre del Alumno</th>
-                        <th className="px-6 py-3">Curso Asignado</th>
-                        <th className="px-6 py-3 text-right">Acciones</th>
-                    </tr>
+                    <tr><th className="px-6 py-3">Nombre</th><th className="px-6 py-3">Curso</th><th className="px-6 py-3 text-right">Acciones</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    {students.length > 0 ? students.map(student => (
-                        <tr key={student.id} className="hover:bg-slate-50">
-                            <td className="px-6 py-3 font-medium text-slate-800 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs"><GraduationCap size={16}/></div>
-                                {student.name}
-                            </td>
-                            <td className="px-6 py-3 text-slate-500">
-                                {student.course_name ? (
-                                    <span className="px-2 py-1 bg-slate-100 rounded text-xs font-medium border border-slate-200">{student.course_name}</span>
-                                ) : (
-                                    <span className="text-xs text-orange-500 italic">Sin curso</span>
-                                )}
-                            </td>
+                    {students.length > 0 ? students.map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50">
+                            <td className="px-6 py-3 font-medium flex gap-2"><div className="w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center text-xs font-bold text-emerald-600">{s.name[0]}</div> {s.name}</td>
+                            <td className="px-6 py-3 text-slate-500">{s.course_name || 'Sin curso'}</td>
                             <td className="px-6 py-3 text-right flex justify-end gap-2">
-                                <button onClick={() => openStudentModal(student)} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded transition-colors"><Edit2 size={16}/></button>
-                                <button onClick={() => handleDeleteStudent(student.id)} className="text-rose-600 hover:bg-rose-50 p-1.5 rounded transition-colors"><Trash2 size={16}/></button>
+                                <button onClick={() => openStudentModal(s)} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded"><Edit2 size={16}/></button>
+                                <button onClick={() => handleDeleteStudent(s.id)} className="text-rose-600 hover:bg-rose-50 p-1.5 rounded"><Trash2 size={16}/></button>
                             </td>
                         </tr>
-                    )) : (
-                        <tr><td colSpan="3" className="px-6 py-8 text-center text-slate-400 italic">No hay alumnos registrados aún.</td></tr>
-                    )}
+                    )) : <tr><td colSpan="3" className="p-6 text-center text-slate-400">Sin alumnos</td></tr>}
                 </tbody>
             </table>
         </div>
@@ -359,26 +357,66 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* 3. Modal Cursos */}
+      {/* 3. Modal Cursos (ACTUALIZADO CON DÍA Y FECHAS) */}
       {showCourseModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
                 <div className="bg-slate-50 p-4 border-b border-slate-100"><h3 className="font-bold text-lg">{isEditingCourse ? 'Editar Curso' : 'Nuevo Curso'}</h3></div>
                 <form onSubmit={handleCourseSubmit} className="p-6 space-y-4">
                     <input type="text" placeholder="Nombre Curso" required className="w-full border p-2 rounded-lg" value={courseForm.title} onChange={e => setCourseForm({...courseForm, title: e.target.value})} />
+                    
+                    {/* FILA 1: UBICACIÓN Y HORA */}
                     <div className="grid grid-cols-2 gap-4">
-                        <input type="text" placeholder="Ubicación" required className="w-full border p-2 rounded-lg" value={courseForm.location} onChange={e => setCourseForm({...courseForm, location: e.target.value})} />
-                        <input type="time" required className="w-full border p-2 rounded-lg" value={courseForm.time} onChange={e => setCourseForm({...courseForm, time: e.target.value})} />
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase">Ubicación</label>
+                            <input type="text" required className="w-full border p-2 rounded-lg mt-1" value={courseForm.location} onChange={e => setCourseForm({...courseForm, location: e.target.value})} />
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                              <label className="text-xs text-slate-500 font-bold uppercase">Inicio</label>
+                              <input type="time" required className="w-full border p-2 rounded-lg mt-1" value={courseForm.time} onChange={e => setCourseForm({...courseForm, time: e.target.value})} />
+                          </div>
+                          <div className="flex-1">
+                              <label className="text-xs text-slate-500 font-bold uppercase">Fin</label>
+                              <input type="time" required className="w-full border p-2 rounded-lg mt-1" value={courseForm.end_time} onChange={e => setCourseForm({...courseForm, end_time: e.target.value})} />
+                          </div>
+                      </div>
                     </div>
+
+                    {/* FILA 2: DÍA Y DURACIÓN (NUEVO) */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase">Día Semana</label>
+                            <select className="w-full border p-2 rounded-lg mt-1 bg-white" value={courseForm.day_of_week} onChange={e => setCourseForm({...courseForm, day_of_week: e.target.value})}>
+                                <option value="1">Lunes</option>
+                                <option value="2">Martes</option>
+                                <option value="3">Miércoles</option>
+                                <option value="4">Jueves</option>
+                                <option value="5">Viernes</option>
+                                <option value="6">Sábado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 font-bold uppercase">Semanas</label>
+                            <input type="number" min="1" max="52" required className="w-full border p-2 rounded-lg mt-1" value={courseForm.duration_weeks} onChange={e => setCourseForm({...courseForm, duration_weeks: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs text-slate-500 font-bold uppercase">Fecha Inicio</label>
+                        <input type="date" required className="w-full border p-2 rounded-lg mt-1" value={courseForm.start_date} onChange={e => setCourseForm({...courseForm, start_date: e.target.value})} />
+                    </div>
+
                     <select className="w-full border p-2 rounded-lg bg-white" value={courseForm.teacher_id} onChange={e => setCourseForm({...courseForm, teacher_id: e.target.value})}>
                         <option value="">-- Sin Asignar --</option>
                         {stats.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <div className="flex gap-4 mt-2">
+
+                    <div className="flex gap-4">
                         <label className="flex items-center gap-2"><input type="radio" name="type" value="school" checked={courseForm.type === 'school'} onChange={() => setCourseForm({...courseForm, type: 'school'})} /> Colegio</label>
                         <label className="flex items-center gap-2"><input type="radio" name="type" value="workshop" checked={courseForm.type === 'workshop'} onChange={() => setCourseForm({...courseForm, type: 'workshop'})} /> Taller</label>
                     </div>
-                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-50 mt-4">
+                    <div className="flex justify-end gap-2 pt-2 border-t mt-2">
                         <button type="button" onClick={() => setShowCourseModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
                         <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg">Guardar</button>
                     </div>
@@ -395,22 +433,14 @@ const AdminDashboard = () => {
                     <h3 className="font-bold text-lg flex items-center gap-2"><GraduationCap size={20}/> {isEditingStudent ? 'Editar Alumno' : 'Matricular Alumno'}</h3>
                 </div>
                 <form onSubmit={handleStudentSubmit} className="p-6 space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
-                        <input type="text" required className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none" placeholder="Ej. Juanito Pérez" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Asignar a Curso</label>
-                        <select className="w-full px-3 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-emerald-500 outline-none" value={studentForm.course_id} onChange={e => setStudentForm({...studentForm, course_id: e.target.value})}>
-                            <option value="">-- Sin Asignar --</option>
-                            {courses.map(c => (
-                                <option key={c.id} value={c.id}>{c.title} ({c.type === 'school' ? 'Colegio' : 'Taller'})</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-50 mt-4">
-                        <button type="button" onClick={() => setShowStudentModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-                        <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shadow-sm transition-transform active:scale-95">Guardar</button>
+                    <input type="text" required className="w-full border p-2 rounded-lg" placeholder="Nombre Alumno" value={studentForm.name} onChange={e => setStudentForm({...studentForm, name: e.target.value})} />
+                    <select className="w-full border p-2 rounded-lg bg-white" value={studentForm.course_id} onChange={e => setStudentForm({...studentForm, course_id: e.target.value})}>
+                        <option value="">-- Sin Asignar --</option>
+                        {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                    </select>
+                    <div className="flex justify-end gap-2 pt-4">
+                        <button type="button" onClick={() => setShowStudentModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                        <button type="submit" className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Guardar</button>
                     </div>
                 </form>
             </div>

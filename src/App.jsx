@@ -11,7 +11,7 @@ import TeacherDashboard from './views/TeacherDashboard';
 import CourseDetail from './views/CourseDetail';
 import CalendarView from './views/CalendarView';
 import VacationView from './views/VacationView';
-import ChangePassword from './views/ChangePassword'; // <--- NUEVO: Importar Vista
+import ChangePassword from './views/ChangePassword';
 
 const AttendanceApp = () => {
   // --- ESTADOS ---
@@ -19,32 +19,38 @@ const AttendanceApp = () => {
   const [currentUser, setCurrentUser] = useState(null); 
   const [loginError, setLoginError] = useState('');
   
+  // Datos del Dashboard
   const [courses, setCourses] = useState([]); 
   const [calendarEvents, setCalendarEvents] = useState([]); 
+  const [vacationRanges, setVacationRanges] = useState([]); // Nuevo estado para bloqueo en calendario
   const [studentsList, setStudentsList] = useState([]); 
   
+  // Navegación y UI
   const [view, setView] = useState('dashboard'); 
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [teacherStatus, setTeacherStatus] = useState('active'); 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Login Form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // --- EFECTO 1: CARGAR DATOS (Solo al entrar y si no es cambio forzado) ---
+  // --- EFECTO 1: CARGAR DATOS (Solo al entrar) ---
   useEffect(() => {
-    if (isAuthenticated && currentUser?.force_pass_change == 0) {
+    if (isAuthenticated && currentUser) {
+      // Importante: Enviamos el ID del usuario para filtrar sus cursos y calendario
       fetch(`/api/get_dashboard.php?user_id=${currentUser.id}`)
         .then(res => res.json())
         .then(data => {
           setCourses(data.courses || []);
           setCalendarEvents(data.calendar || []);
+          setVacationRanges(data.vacation_ranges || []); // Guardamos rangos para validar fechas
         })
         .catch(err => console.error("Error cargando dashboard:", err));
     }
   }, [isAuthenticated, currentUser]);
 
-  // --- EFECTO 2: SEGURIDAD (Check continuo) ---
+  // --- EFECTO 2: SEGURIDAD (Check continuo de sesión) ---
   useEffect(() => {
     if (!isAuthenticated || !currentUser) return;
 
@@ -61,12 +67,12 @@ const AttendanceApp = () => {
         }
       })
       .catch(err => console.error("Error verificando sesión:", err));
-    }, 5000); 
+    }, 5000); // Revisar cada 5 segundos
 
     return () => clearInterval(interval);
   }, [isAuthenticated, currentUser]);
 
-  // --- FUNCIONES ---
+  // --- FUNCIONES DE AUTENTICACIÓN ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -87,19 +93,20 @@ const AttendanceApp = () => {
       // Login Exitoso
       setCurrentUser(data);
       setIsAuthenticated(true);
-      
-      // Chequeo de estado de vacaciones
+
+      // Determinar estado inicial (Vacaciones o Activo)
       if (data.current_status === 'vacation') {
         setTeacherStatus('vacation');
       } else {
         setTeacherStatus('active');
       }
-
+      
+      // Determinar vista inicial según rol
       setView(data.role === 'admin' ? 'admin-dashboard' : 'dashboard');
 
     } catch (error) {
       console.error("Error de login:", error);
-      setLoginError(error.message);
+      setLoginError(error.message); 
     }
   };
 
@@ -111,21 +118,29 @@ const AttendanceApp = () => {
     setView('dashboard');
     setTeacherStatus('active'); 
     setCourses([]);
+    setVacationRanges([]);
   };
 
-  // --- NUEVA FUNCIÓN FASE 4: Actualizar estado tras cambio de pass ---
+  // --- Callback cuando se cambia contraseña ---
   const handlePasswordUpdated = () => {
+    // Quitamos el flag de cambio forzado para permitir entrar
     setCurrentUser(prev => ({ ...prev, force_pass_change: 0 }));
   };
 
+  // --- FUNCIONES DEL PROFESOR ---
   const handleCourseSelect = (course) => {
-    if (teacherStatus === 'vacation') return;
+    // Doble validación: Si está de vacaciones, no puede entrar
+    if (teacherStatus === 'vacation') {
+        alert("No puedes acceder a cursos durante tus vacaciones.");
+        return;
+    }
     
     setSelectedCourse(course);
     setView('course');
     setMobileMenuOpen(false); 
-    setStudentsList([]); 
+    setStudentsList([]); // Limpieza visual
 
+    // Cargar alumnos del curso seleccionado
     fetch(`/api/get_students.php?course_id=${course.id}`)
       .then(res => res.json())
       .then(data => setStudentsList(data))
@@ -162,6 +177,7 @@ const AttendanceApp = () => {
   
   const handleStatusChange = (status) => {
     setTeacherStatus(status);
+    // Si se pone en vacaciones manualmente, lo mandamos al home
     if (status === 'vacation') {
       setView('dashboard');
       setSelectedCourse(null);
@@ -175,7 +191,7 @@ const AttendanceApp = () => {
     ));
   };
 
-  // --- RENDER ---
+  // --- RENDERIZADO PRINCIPAL ---
   
   // 1. Si no está logueado -> Login
   if (!isAuthenticated) {
@@ -191,8 +207,8 @@ const AttendanceApp = () => {
     );
   }
 
-  // 2. Si está logueado pero DEBE cambiar contraseña -> ChangePassword
-  if (currentUser?.force_pass_change == 1) {
+  // 2. Si debe cambiar contraseña obligatoriamente -> Pantalla de Bloqueo
+  if (currentUser.force_pass_change == 1) {
     return (
       <ChangePassword 
         currentUser={currentUser} 
@@ -202,7 +218,7 @@ const AttendanceApp = () => {
     );
   }
 
-  // 3. App Principal
+  // 3. App Principal (Sidebar + Contenido)
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-900 overflow-hidden">
       <Sidebar 
@@ -225,21 +241,40 @@ const AttendanceApp = () => {
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           
+          {/* VISTA: ADMIN DASHBOARD */}
           {view === 'admin-dashboard' && <AdminDashboard />}
           
+          {/* VISTA: CALENDARIO */}
           {view === 'calendar' && (
             <CalendarView 
               calendarEvents={calendarEvents} 
               teacherStatus={teacherStatus} 
+              vacationRanges={vacationRanges} // Para bloquear días
+              handleCourseSelect={handleCourseSelect} // Para click en clase
             />
           )}
 
+          {/* VISTA: CAMBIO DE CONTRASEÑA VOLUNTARIO */}
+          {view === 'settings' && (
+            <div className="flex justify-center items-start pt-10 animate-in fade-in">
+                <ChangePassword 
+                    currentUser={currentUser} 
+                    onPasswordChanged={() => {
+                        alert("Contraseña actualizada correctamente.");
+                        setView('dashboard');
+                    }} 
+                    isForced={false} 
+                />
+            </div>
+          )}
+
+          {/* VISTAS: PROFESOR (Dashboard / Curso / Vacaciones) */}
           {(view === 'dashboard' || view === 'course') && (
             <>
               {teacherStatus === 'vacation' ? (
                 <VacationView 
                   handleStatusChange={handleStatusChange} 
-                  currentUser={currentUser} 
+                  currentUser={currentUser}
                 />
               ) : (
                 <>
